@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.jdbc.Driver
+    username: root
+    password: 123456
+    url: jdbc:mysql://192.168.0.104:3306/sell?characterEncoding=utf-8&useSSL=false
+  jpa:
+    show-sql: true
+
+server:
+  context-path: /sell
+
+#springboot集成logback有两种配置方式,一种是在application文件中配置,这种比较简单
+#logging:
+#  pattern:
+#    # d是输出日期,msg是日志内容,n换行
+#    console: "%d - %msg%n"
+#  # path和file都可以配置日志输出的路径,配置一个就好,path默认是spring.log日志文件,file可以指定名称
+#  path: D:/Others/
+#  file: D:/Others/sell.log
+#  level: debug
