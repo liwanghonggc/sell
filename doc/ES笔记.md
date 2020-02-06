@@ -207,7 +207,7 @@ put localhost:9200/nba/_doc/1?op_type=create
 ```
 POST方式
 
-post localhost:9200/nba/_doc/1  (内容选application/json)
+post localhost:9200/nba/_doc  (内容选application/json)
 {
  "name":"李旺红",
  "team_name":"⽕箭",
@@ -293,7 +293,7 @@ post localhost:9200/_mget
 			"_id": "1"
 		},
 		{
-		        这里可以继承指定其他文档
+		        这里可以继续指定其他文档
 		}
 	]
 }
@@ -414,7 +414,7 @@ delete localhost:9200/nba/_doc/1
    词条查询不会分析查询条件,只有当词条和查询字符串完全匹配时,才匹配搜索
 2) 全文查询,也叫match查询
    ElasticSearch引擎会先分析查询字符串,将其拆分成多个分词,只要已分析的字段中包含词条的任意⼀个,或全部包含,
-就匹配查询条件,返回该⽂档；如果不包含任意⼀个分词,表示没有任何⽂档匹配查询条件
+就匹配查询条件,返回该⽂档;如果不包含任意⼀个分词,表示没有任何⽂档匹配查询条件
 ```
 ####4.1、单条term查询
 ```
@@ -1060,6 +1060,806 @@ should     应该出现在⽂档中
       ]
     }
 ```
+
+####7.6、ES聚合查询之指标聚合
 ```
-3) 
+聚合分析是什么?
+    聚合分析是数据库中重要的功能特性,完成对⼀个查询的数据集中数据的聚合计算,如:找出某字段(或计算表达式的结果)
+的最⼤值、最⼩值,计算和、平均值等. ES作为搜索引擎兼数据库,同样提供了强⼤的聚合分析能⼒.对⼀个数据集求最⼤、
+最⼩、和、平均值等指标的聚合,在ES中称为指标聚合⽽关系型数据库中除了有聚合函数外,还可以对查询出的数据进⾏分
+组group by,再在组上进⾏指标聚合,在ES中称为桶聚合.
+```
+```
+1)  求出⽕箭队球员的平均年龄
+    post nba/_search
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      },
+      "aggs": {
+        "avgAge": {                -- AvgAge是自定义的
+          "avg": {
+            "field": "age"
+          }
+        }
+      },
+      "size": 0
+    }
+    
+2)  value_count统计⾮空字段的⽂档数,求出⽕箭队中球员打球时间不为空的数量
+    post nba/_search
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      },
+      "aggs": {
+        "countYearNotNull": {
+          "value_count": {
+            "field": "playYear"
+          }
+        }
+      },
+      "size": 0
+    }
+    
+3)  查出⽕箭队有多少名球员
+    POST nba/_count
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      }
+    }
+    
+4)  Cardinality值去重计数,查出⽕箭队中年龄不同的数量
+    POST nba/_search
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      },
+      "aggs": {
+        "countAgeDiff": {
+          "cardinality": {
+            "field": "age"
+          }
+        }
+      },
+      "size": 0
+    }
+    
+5)  stats统计count max min avg sum 5个值
+    POST nba/_search
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      },
+      "aggs": {
+        "statsAge": {
+          "stats": {
+            "field": "age"
+          }
+        }
+      },
+      "size": 0
+    }
+    
+6)  Extended stats⽐stats多4个统计结果: 平⽅和、⽅差、标准差、平均值加/减两个标准差的区间
+    POST /nba/_search
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      },
+      "aggs": {
+        "extendStatsAge": {
+          "extended_stats": {
+            "field": "age"
+          }
+        }
+      },
+      "size": 0
+    }
+    
+7)  查出⽕箭的球员的年龄占⽐. Percentiles占⽐百分位对应的值统计,默认返回[ 1, 5, 25, 50, 75, 95, 99 ]分位上的值
+    POST /nba/_search
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      },
+      "aggs": {
+        "pecentAge": {
+          "percentiles": {
+            "field": "age"
+          }
+        }
+      },
+      "size": 0
+    }
+    
+    返回
+    {
+      "took" : 31,
+      "timed_out" : false,
+      "_shards" : {
+        "total" : 1,
+        "successful" : 1,
+        "skipped" : 0,
+        "failed" : 0
+      },
+      "hits" : {
+        "total" : {
+          "value" : 21,
+          "relation" : "eq"
+        },
+        "max_score" : null,
+        "hits" : [ ]
+      },
+      "aggregations" : {
+        "pecentAge" : {
+          "values" : {
+            "1.0" : 21.0,
+            "5.0" : 21.0,
+            "25.0" : 22.75,
+            "50.0" : 25.0,
+            "75.0" : 30.25,
+            "95.0" : 35.349999999999994,
+            "99.0" : 37.0
+          }
+        }
+      }
+    }
+    
+    自定义百分比
+    POST /nba/_search
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      },
+      "aggs": {
+        "percentAge": {
+          "percentiles": {
+            "field": "age",
+            "percents": [
+              20,
+              50,
+              75
+            ]
+          }
+        }
+      },
+      "size": 0
+    }
+```
+####7.7 ES聚合查询之桶聚合
+```
+关系型数据库中除了有聚合函数外,还可以对查询出的数据进⾏分组group by,再在组上进⾏指标聚合,在ES中称为桶聚合
+```
+```
+Terms Aggregation 根据字段项分组聚合
+
+1) ⽕箭队根据年龄进⾏分组
+   POST /nba/_search
+   {
+     "query": {
+       "term": {
+         "teamNameEn": {
+           "value": "Rockets"
+         }
+       }
+     },
+     "aggs": {
+       "aggsAge": {
+         "terms": {
+           "field": "age",
+           "size": 10
+         }
+       }
+     },
+     "size": 0
+   }
+   
+2)  order分组聚合排序.⽕箭队根据年龄进⾏分组,分组信息通过年龄从⼤到⼩排序(通过指定字段)
+    POST /nba/_search
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      },
+      "aggs": {
+        "aggsAge": {
+          "terms": {
+            "field": "age",
+            "size": 10,
+            "order": {
+              "_key": "desc"
+            }
+          }
+        }
+      },
+      "size": 0
+    }
+    
+3)  ⽕箭队根据年龄进⾏分组,分组信息通过⽂档数从⼤到⼩排序(通过⽂档数)
+    POST /nba/_search
+    {
+      "query": {
+        "term": {
+          "teamNameEn": {
+            "value": "Rockets"
+          }
+        }
+      },
+      "aggs": {
+        "aggsAge": {
+          "terms": {
+            "field": "age",
+            "size": 10,
+            "order": {
+              "_count": "desc"
+            }
+          }
+        }
+      },
+      "size": 0
+    }
+    
+4)  每⽀球队按该队所有球员的平均年龄进⾏分组排序(通过分组指标值)
+    POST nba/_search
+    {
+      "aggs": {
+        "aggTeamName": {
+          "terms": {
+            "field": "teamNameEn",
+            "size": 30,
+            "order": {
+              "avgAge": "desc"
+            }
+          },
+          "aggs": {
+            "avgAge": {
+              "avg": {
+                "field": "age"
+              }
+            }
+          }
+        }
+      },
+      "size": 0
+    }
+    
+5)  筛选分组聚合. 湖⼈和⽕箭队按球队平均年龄进⾏分组排序(指定值列表)
+    POST nba/_search
+    {
+      "aggs": {
+        "aggTeamName": {
+          "terms": {
+            "field": "teamNameEn",
+            "include": [
+              "Lakers",
+              "Rockets",
+              "Warriors"
+            ],
+            "exclude": [
+              "Warriors"
+            ],
+            "size": 30,
+            "order": {
+              "avgAge": "desc"
+            }
+          },
+          "aggs": {
+            "avgAge": {
+              "avg": {
+                "field": "age"
+              }
+            }
+          }
+        }
+      },
+      "size": 0
+    }
+    
+6)  Range Aggregation范围分组聚合,NBA球员年龄按20,20-35,35这样分组
+    POST nba/_search
+    {
+      "aggs": {
+        "ageRange": {
+          "range": {
+            "field": "age",
+            "ranges": [
+              {
+                "to": 20
+              },
+              {
+                "from": 20,
+                "to": 35
+              },
+              {
+                "from": 35
+              }
+            ]
+          }
+        }
+      },
+      "size": 0
+    }
+    
+7)  NBA球员年龄按20,20-35,35这样分组(起别名)
+    POST /nba/_search
+    {
+      "aggs": {
+        "ageRange": {
+          "range": {
+            "field": "age",
+            "ranges": [
+              {
+                "to": 20,
+                "key": "A"
+              },
+              {
+                "from": 20,
+                "to": 35,
+                "key": "B"
+              },
+              {
+                "from": 35,
+                "key": "C"
+              }
+            ]
+          }
+        }
+      },
+      "size": 0
+    }
+    
+8)  Date Range Aggregation时间范围分组聚合
+    POST /nba/_search
+    {
+      "aggs": {
+        "birthDayRange": {
+          "date_range": {
+            "field": "birthDay",
+            "format": "MM-yyy",
+            "ranges": [
+              {
+                "to": "01-1989"
+              },
+              {
+                "from": "01-1989",
+                "to": "01-1999"
+              },
+              {
+                "from": "01-1999",
+                "to": "01-2009"
+              },
+              {
+                "from": "01-2009"
+              }
+            ]
+          }
+        }
+      },
+      "size": 0
+    }
+    
+9)  按天、⽉、年等进⾏聚合统计. 可按 year (1y), quarter (1q), month (1M), week (1w), day
+    (1d), hour (1h), minute (1m), second (1s) 间隔聚合
+    NBA球员按出⽣年分组
+    POST /nba/_search
+    {
+      "aggs": {
+        "birthday_aggs": {
+          "date_histogram": {
+            "field": "birthDay",
+            "format": "yyyy",
+            "interval": "year"
+          }
+        }
+      },
+      "size": 0
+    }
+```
+####7.8 ES之Query_String查询
+```
+    query_string 查询,如果熟悉lucene的查询语法,我们可以直接⽤lucene查询语法写⼀个查询串进⾏查询,ES中接到
+请求后,通过查询解析器,解析查询串⽣成对应的查询
+```
+
+##8、ES的高级使用
+####8.1、ES之索引别名的引用
+```
+    在开发中,随着业务需求的迭代,较⽼的业务逻辑就要⾯临更新甚⾄是重构,⽽对于es来说,为了适应新的业务逻辑,
+可能就要对原有的索引做⼀些修改,⽐如对某些字段做调整,甚⾄是重建索引.⽽做这些操作的时候,可能会对业务
+造成影响,甚⾄是停机调整等问题.由此,es提供了索引别名来解决这些问题. 索引别名就像⼀个快捷⽅式或是软
+连接,可以指向⼀个或多个索引,也可以给任意⼀个需要索引名的API来使⽤.别名的应⽤为程序提供了极⼤地灵活性
+```
+```
+1)  创建别名
+    POST /_aliases
+    {
+      "actions": [
+        {
+          "add": {
+            "index": "nba",
+            "alias": "nba_v1"
+          }
+        }
+      ]
+    }
+    
+2)  查看别名
+    GET nba/_alias
+    
+3)  删除别名
+    POST /_aliases
+    {
+      "actions": [
+        {
+          "remove": {
+            "index": "nba",
+            "alias": "nba_v1"
+          }
+        }
+      ]
+    }
+    
+4)  重命名
+    POST /_aliases
+    {
+      "actions": [
+        {
+          "remove": {
+            "index": "nba",
+            "alias": "nba_v1.0"
+          }
+        },
+        {
+          "add": {
+            "index": "nba",
+            "alias": "nba_v2.0"
+          }
+        }
+      ]
+    }
+    
+5)  为多个索引指定一个别名
+    POST /_aliases
+    {
+      "actions": [
+        {
+          "add": {
+            "index": "nba",
+            "alias": "national_player"
+          }
+        },
+        {
+          "add": {
+            "index": "nba",
+            "alias": "national_player"
+          }
+        }
+      ]
+    }
+    
+6)  为同个索引指定多个别名
+    POST /_aliases
+    {
+      "actions": [
+        {
+          "add": {
+            "index": "nba",
+            "alias": "nba_v2.1"
+          }
+        },
+        {
+          "add": {
+            "index": "nba",
+            "alias": "nba_v2.2"
+          }
+        }
+      ]
+    }
+    
+7)  当别名指定了多个索引,可以指定写某个索引
+    POST /_aliases
+    {
+      "actions": [
+        {
+          "add": {
+            "index": "nba",
+            "alias": "national_player",
+            "is_write_index": true
+          }
+        },
+        {
+          "add": {
+            "index": "wnba",
+            "alias": "national_player"
+          }
+        }
+      ]
+    }
+```
+####8.2、ES之重建索引
+```
+    Elasticsearch是⼀个实时的分布式搜索引擎,为⽤户提供搜索服务,当我们决定存储某种数据时,在创建索引
+的时候需要将数据结构完整确定下来,于此同时索引的设定和很多固定配置将⽤不能改变.当需要改变数据结构时,就
+需要重新建⽴索引,为此,Elastic团队提供了很多辅助⼯具帮助开发⼈员进⾏重建索引.
+```
+```
+步骤
+1) nba取⼀个别名nba_latest, nba_latest作为对外使⽤
+2) 新增⼀个索引nba_20220101,结构复制于nba索引,根据业务要求修改字段
+3) 将nba数据同步到nba_20220101
+4) 给nba_20220101添加别名nba_latest,删除nba别名nba_latest
+5) 删除nba索引
+6) 通过新别名访问索引
+
+我们对外提供访问nba索引时使⽤的是nba_latest别名
+
+3) 将旧索引数据copy到新索引.异步执⾏,如果reindex时间过⻓,建议加上wait_for_completion=false的参数条件,
+   这样reindex将直接返回taskId
+   POST /_reindex?wait_for_completion=false
+   {
+     "source": {
+       "index": "nba"
+     },
+     "dest": {
+       "index": "nba_20220101"
+     }
+   }
+```
+
+####8.3、ES之Refresh操作
+```
+理想的搜索:新的数据⼀添加到索引中⽴⻢就能搜索到,但是真实情况不是这样的
+curl -X PUT localhost:9200/star/_doc/888 -H 'Content-Type:application/json' -d '{ "displayName": "蔡徐坤" }'
+curl -X GET localhost:9200/star/_doc/_search?pretty
+```
+```
+1) 修改默认更新时间(默认时间是1s)
+   PUT /nba/_settings
+   {
+     "index": {
+       "refresh_interval": "5s"
+     }
+   }
+   
+2) 强制刷新
+   curl -X PUT localhost:9200/star/_doc/666?refresh -H 'Content-Type:application/json' -d '{ "displayName": "杨超越" }'
+   curl -X GET localhost:9200/star/_doc/_search?pretty
+
+3) 将refresh关闭
+   PUT /star/_settings
+   {
+     "index": {
+       "refresh_interval": "-1"
+     }
+   }
+```
+####8.4、ES之高亮查询
+```
+如果返回的结果集中很多符合条件的结果,那怎么能⼀眼就能看到我们想要的那个结果呢
+```
+```
+1)  高亮查询
+    POST nba_latest/_search
+    {
+      "query": {
+        "match": {
+          "displayNameEn": "james"
+        }
+      },
+      "highlight": {
+        "fields": {
+          "displayNameEn": {}
+        }
+      }
+    }
+    
+2)  自定义高亮查询
+    POST /nba_latest/_search
+    {
+      "query": {
+        "match": {
+          "displayNameEn": "james"
+        }
+      },
+      "highlight": {
+        "fields": {
+          "displayNameEn": {
+            "pre_tags": [
+              "<h1>"
+            ],
+            "post_tags": [
+              "</h1>"
+            ]
+          }
+        }
+      }
+    }
+```
+####8.6、ES之查询建议
+```
+查询建议,是为了给⽤户提供更好的搜索体验. 包括:词条检查,⾃动补全
+Suggester
+    Term suggester
+    Phrase suggester
+    Completion suggester
+```
+```
+1)  Term suggester,term 词条建议器,对给输⼊的⽂本进⾏分词,为每个分词提供词项建议
+    POST /nba_latest/_search
+    {
+      "suggest": {
+        "my-suggestion": {
+          "text": "jamse",
+          "term": {
+            "suggest_mode": "missing",
+            "field": "displayNameEn"
+          }
+        }
+      }
+    }
+    
+    返回,jamse故意输错了,下面返回建议的输入值,还有打分
+    {
+      "took" : 5,
+      "timed_out" : false,
+      "_shards" : {
+        "total" : 1,
+        "successful" : 1,
+        "skipped" : 0,
+        "failed" : 0
+      },
+      "hits" : {
+        "total" : {
+          "value" : 0,
+          "relation" : "eq"
+        },
+        "max_score" : null,
+        "hits" : [ ]
+      },
+      "suggest" : {
+        "my-suggestion" : [
+          {
+            "text" : "jamse",
+            "offset" : 0,
+            "length" : 5,
+            "options" : [
+              {
+                "text" : "james",
+                "score" : 0.8,
+                "freq" : 5
+              },
+              {
+                "text" : "jamal",
+                "score" : 0.6,
+                "freq" : 2
+              },
+              {
+                "text" : "jake",
+                "score" : 0.5,
+                "freq" : 1
+              },
+              {
+                "text" : "jose",
+                "score" : 0.5,
+                "freq" : 1
+              }
+            ]
+          }
+        ]
+      }
+    }
+```
+```
+2)  Phrase suggester,phrase短语建议,在term的基础上,会考量多个term之间的关系,⽐如是否同时出现在索
+    引的原⽂⾥,相邻程度,以及词频等
+    POST /nba_latest/_search
+    {
+      "suggest": {
+        "my-suggestion": {
+          "text": "jamse harden",
+          "phrase": {
+            "field": "displayNameEn"
+          }
+        }
+      }
+    }
+    
+    返回
+    {
+      "took" : 356,
+      "timed_out" : false,
+      "_shards" : {
+        "total" : 1,
+        "successful" : 1,
+        "skipped" : 0,
+        "failed" : 0
+      },
+      "hits" : {
+        "total" : {
+          "value" : 0,
+          "relation" : "eq"
+        },
+        "max_score" : null,
+        "hits" : [ ]
+      },
+      "suggest" : {
+        "my-suggestion" : [
+          {
+            "text" : "jamse harden",
+            "offset" : 0,
+            "length" : 12,
+            "options" : [
+              {
+                "text" : "james harden",
+                "score" : 0.0034703047
+              },
+              {
+                "text" : "jamal harden",
+                "score" : 0.0022665835
+              },
+              {
+                "text" : "jake harden",
+                "score" : 0.0017559344
+              },
+              {
+                "text" : "jose harden",
+                "score" : 0.0017559344
+              }
+            ]
+          }
+        ]
+      }
+    }
+```
+```
+3)  Completion suggester,完成建议,要先修改teamCityEn的type为completion
+    输入一个不完整的词,会返回建议你输入的完整词
+    POST /nba_latest/_search
+    {
+      "suggest": {
+        "my-suggestion": {
+          "text": "Miam",
+          "completion": {
+            "field": "teamCityEn"
+          }
+        }
+      }
+    }
 ```
